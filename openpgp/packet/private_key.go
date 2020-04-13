@@ -45,6 +45,7 @@ type PrivateKey struct {
 	s2kType       S2KType
 	// Full parameters of the S2K packet
 	s2kParams     *s2k.Params
+	Dummy         bool        // if true then the private key is a dummy key. This is a GNU extension.
 }
 
 //S2KType s2k packet type
@@ -148,11 +149,15 @@ func (pk *PrivateKey) parse(r io.Reader) (err error) {
 			return
 		}
 		pk.cipher = CipherFunction(buf[0])
-		pk.Encrypted = true
 		pk.s2kParams, err = s2k.ParseIntoParams(r)
 		if err != nil {
+			if _, ok := err.(errors.ErrDummyPrivateKey); ok {
+				err = nil
+				pk.Dummy = true
+			}
 			return
 		}
+		pk.Encrypted = true
 		pk.s2k, err = pk.s2kParams.Function()
 		if err != nil {
 			return
@@ -203,16 +208,24 @@ func (pk *PrivateKey) Serialize(w io.Writer) (err error) {
 	if err != nil {
 		return
 	}
-
-	privateKeyBuf := bytes.NewBuffer(nil)
-	if pk.Encrypted {
-		err = pk.SerializeEncrypted(privateKeyBuf)
-	} else {
-		err = pk.SerializeUnEncrypted(privateKeyBuf)
+	if pk.Dummy {
+		b := []byte{255, 0, 101, 0}
+		b = append(b, []byte("GNU")...)
+		b = append(b, 1)
+		buf.Write(b)
 	}
 
-	if err != nil {
-		return
+	privateKeyBuf := bytes.NewBuffer(nil)
+	if !pk.Dummy {
+		if pk.Encrypted {
+			err = pk.SerializeEncrypted(privateKeyBuf)
+		} else {
+			err = pk.SerializeUnEncrypted(privateKeyBuf)
+		}
+
+		if err != nil {
+			return
+		}
 	}
 
 	ptype := packetTypePrivateKey
@@ -227,6 +240,9 @@ func (pk *PrivateKey) Serialize(w io.Writer) (err error) {
 	}
 	_, err = w.Write(contents)
 	if err != nil {
+		return
+	}
+	if pk.Dummy {
 		return
 	}
 	_, err = w.Write(privateKeyBytes)
@@ -329,6 +345,9 @@ func serializeECDHPrivateKey(w io.Writer, priv *ecdh.PrivateKey) error {
 
 // Decrypt decrypts an encrypted private key using a passphrase.
 func (pk *PrivateKey) Decrypt(passphrase []byte) error {
+	if pk.Dummy {
+		return errors.ErrDummyPrivateKey("dummy key found")
+	}
 	if !pk.Encrypted {
 		return nil
 	}

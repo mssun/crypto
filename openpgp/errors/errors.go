@@ -86,3 +86,11 @@ type AEADError string
 func (ae AEADError) Error() string {
 	return "openpgp: aead error: " + string(ae)
 }
+
+// ErrDummyPrivateKey results when operations are attempted on a private key
+// that is just a dummy key.
+type ErrDummyPrivateKey string
+func (dke ErrDummyPrivateKey) Error() string {
+	return "openpgp: s2k GNU dummy key: " + string(dke)
+}
+

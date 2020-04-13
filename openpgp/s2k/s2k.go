@@ -237,12 +237,23 @@ func ParseIntoParams(r io.Reader) (params *Params, err error) {
 		params.salt = buf[:8]
 		params.countByte = buf[8]
 		return params, nil
+	case 101:
+		if _, err = io.ReadFull(r, buf[:4]); err != nil {
+			return params, err
+		}
+		if buf[0] == 'G' && buf[1] == 'N' && buf[2] == 'U' && buf[3] == 1 {
+			return params, errors.ErrDummyPrivateKey("dummy key found")
+		}
+		return params, errors.UnsupportedError("GNU S2K extension")
 	}
 
 	return nil, errors.UnsupportedError("S2K function")
 }
 
 func (params *Params) Function() (f func(out, in []byte), err error) {
+	if params.mode == 101 {
+		return nil, nil
+	}
 	hashObj, ok := HashIdToHash(params.hashId)
 	if !ok {
 		return nil, errors.UnsupportedError("hash for S2K function: " + strconv.Itoa(int(params.hashId)))

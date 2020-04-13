@@ -84,6 +84,9 @@ func checksumKeyMaterial(key []byte) uint16 {
 // private key must have been decrypted first.
 // If config is nil, sensible defaults will be used.
 func (e *EncryptedKey) Decrypt(priv *PrivateKey, config *Config) error {
+	if priv.Dummy {
+		return errors.ErrDummyPrivateKey("dummy key found")
+	}
 	if e.KeyId != 0 && e.KeyId != priv.KeyId {
 		return errors.InvalidArgumentError("cannot decrypt encrypted session key for key id " + strconv.FormatUint(e.KeyId, 16) + " with private key id " + strconv.FormatUint(priv.KeyId, 16))
 	}

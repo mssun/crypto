@@ -53,6 +53,13 @@ func (ske *SymmetricKeyEncrypted) parse(r io.Reader) error {
 	}
 
 	var err error
+	if ske.s2k, err = s2k.Parse(r); err != nil {
+		if _, ok := err.(errors.ErrDummyPrivateKey); ok {
+			return errors.UnsupportedError("missing key GNU extension in session key")
+		}
+		return err
+	}
+
 	ske.s2k, err = s2k.Parse(r)
 	if err != nil {
 		return err
